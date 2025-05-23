@@ -1,0 +1,59 @@
+{% extends "base.html" %}
+
+{% block title %}Upload Authorization - NIRMAN 2K25{% endblock %}
+
+{% block content %}
+<div class="py-12">
+    <div class="max-w-md mx-auto px-4 sm:px-6 lg:px-8">
+        <div class="bg-white shadow rounded-lg p-6">
+            <div class="text-center mb-8">
+                <h2 class="text-2xl font-extrabold text-gray-900">
+                    Upload Authorization
+                </h2>
+                <p class="mt-2 text-lg text-gray-600">
+                    Enter PIN to access upload functionality
+                </p>
+            </div>
+            
+            {% with messages = get_flashed_messages(with_categories=true) %}
+                {% if messages %}
+                    {% for category, message in messages %}
+                        <div class="{% if category == 'success' %}bg-green-100 border-green-500 text-green-700{% else %}bg-red-100 border-red-500 text-red-700{% endif %} p-4 mb-6 border-l-4 rounded" role="alert">
+                            <p>{{ message }}</p>
+                        </div>
+                    {% endfor %}
+                {% endif %}
+            {% endwith %}
+            
+            <form action="{{ url_for('verify_upload_pin') }}" method="post">
+                <div class="space-y-6">
+                    <div>
+                        <label for="pin" class="block text-sm font-medium text-gray-700">Upload PIN</label>
+                        <div class="mt-1">
+                            <input type="password" name="pin" id="pin" required 
+                                  class="shadow-sm focus:ring-fest-primary focus:border-fest-primary block w-full sm:text-sm border-gray-300 rounded-md" 
+                                  placeholder="Enter PIN to upload photos">
+                        </div>
+                        <p class="mt-2 text-sm text-gray-500">
+                            Only authorized users can upload photos to the NIRMAN 2K25 gallery.
+                        </p>
+                    </div>
+                    
+                    <div>
+                        <button type="submit" 
+                                class="w-full inline-flex justify-center items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-fest-primary hover:bg-fest-secondary focus:outline-none transition duration-300">
+                            Verify PIN
+                        </button>
+                    </div>
+                    
+                    <div class="text-center mt-4">
+                        <a href="{{ url_for('gallery') }}" class="text-sm text-gray-600 hover:text-fest-primary">
+                            Back to Gallery
+                        </a>
+                    </div>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+{% endblock %} 
