@@ -1,0 +1,481 @@
+{% extends "base.html" %}
+
+{% block title %}Upload - NIRMAN 2K25{% endblock %}
+
+{% block extra_css %}
+<style>
+    .drag-area {
+        border: 2px dashed #ccc;
+        height: 300px;
+        width: 100%;
+        border-radius: 5px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        flex-direction: column;
+        position: relative;
+        overflow-y: auto;
+    }
+    
+    .drag-area.active {
+        border: 2px solid #722F37;
+    }
+    
+    .image-preview {
+        max-width: 100%;
+        max-height: 280px;
+        object-fit: contain;
+    }
+    
+    .size-info {
+        margin-top: 10px;
+        font-size: 0.875rem;
+    }
+    
+    .spinner {
+        border: 3px solid rgba(0, 0, 0, 0.1);
+        width: 20px;
+        height: 20px;
+        border-radius: 50%;
+        border-left-color: #722F37;
+        animation: spin 1s linear infinite;
+        display: inline-block;
+        vertical-align: middle;
+        margin-right: 10px;
+    }
+    
+    @keyframes spin {
+        0% { transform: rotate(0deg); }
+        100% { transform: rotate(360deg); }
+    }
+    
+    .hidden {
+        display: none;
+    }
+    
+    .preview-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+        gap: 10px;
+        margin-top: 10px;
+        width: 100%;
+        padding: 10px;
+    }
+    
+    .preview-item {
+        position: relative;
+        width: 100%;
+        height: 100px;
+        border-radius: 4px;
+        overflow: hidden;
+    }
+    
+    .preview-item img {
+        width: 100%;
+        height: 100%;
+        object-fit: cover;
+    }
+    
+    .preview-item .remove-btn {
+        position: absolute;
+        top: 5px;
+        right: 5px;
+        background-color: rgba(255, 255, 255, 0.7);
+        border-radius: 50%;
+        padding: 2px;
+        cursor: pointer;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        width: 20px;
+        height: 20px;
+    }
+    
+    .file-info {
+        font-size: 0.7rem;
+        color: #666;
+        margin-top: 4px;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="py-12">
+    <div class="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8">
+        <div class="bg-white shadow rounded-lg p-6">
+            <div class="text-center mb-8">
+                <h2 class="text-3xl font-extrabold text-gray-900">
+                    Upload Your NIRMAN 2K25 Photos
+                </h2>
+                <p class="mt-2 text-lg text-gray-600">
+                    Share your favorite moments from the college fest
+                </p>
+            </div>
+            
+            {% if not cloudinary_configured %}
+            <div class="bg-amber-100 border-l-4 border-amber-500 text-amber-700 p-4 mb-6" role="alert">
+                <p class="font-bold">Cloudinary Not Configured</p>
+                <p>The photo upload functionality is currently disabled because Cloudinary credentials are not properly configured.</p>
+                <p class="mt-2">Please update the .env file with your actual Cloudinary credentials to enable uploads.</p>
+                <p class="mt-2">
+                    <a href="https://cloudinary.com/" target="_blank" class="text-amber-800 underline">Sign up for a free Cloudinary account</a>
+                </p>
+            </div>
+            {% endif %}
+            
+            {% with messages = get_flashed_messages(with_categories=true) %}
+                {% if messages %}
+                    {% for category, message in messages %}
+                        <div class="{% if category == 'success' %}bg-green-100 border-green-500 text-green-700{% else %}bg-red-100 border-red-500 text-red-700{% endif %} p-4 mb-6 border-l-4 rounded" role="alert">
+                            <p>{{ message }}</p>
+                        </div>
+                    {% endfor %}
+                {% endif %}
+            {% endwith %}
+            
+            <form action="{{ url_for('upload') }}" method="post" enctype="multipart/form-data" id="uploadForm">
+                <div class="space-y-6">
+                    <div>
+                        <label for="uploader_name" class="block text-sm font-medium text-gray-700">Your Name</label>
+                        <div class="mt-1">
+                            <input type="text" name="uploader_name" id="uploader_name" required class="shadow-sm focus:ring-fest-primary focus:border-fest-primary block w-full sm:text-sm border-gray-300 rounded-md" placeholder="Who took these amazing photos?">
+                        </div>
+                    </div>
+                    
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-2">Upload Photos</label>
+                        <p class="text-sm text-gray-500 mb-2">
+                            Select multiple photos at once. Photos larger than 2MB will be automatically compressed for faster uploads.
+                        </p>
+                        <div class="drag-area" id="dragArea">
+                            <div id="uploadPrompt">
+                                <svg class="mx-auto h-12 w-12 text-gray-400" stroke="currentColor" fill="none" viewBox="0 0 48 48">
+                                    <path d="M28 8H12a4 4 0 00-4 4v20m32-12v8m0 0v8a4 4 0 01-4 4H12a4 4 0 01-4-4v-4m32-4l-3.172-3.172a4 4 0 00-5.656 0L28 28M8 32l9.172-9.172a4 4 0 015.656 0L28 28m0 0l4 4m4-24h8m-4-4v8m-12 4h.02" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
+                                </svg>
+                                <p class="mt-1 text-sm text-gray-600">
+                                    Drag and drop your images here, or click to select
+                                </p>
+                                <p class="mt-1 text-xs text-gray-500">JPEG, PNG or JPG (max 10MB per file)</p>
+                            </div>
+                            <div id="previewGrid" class="preview-grid hidden"></div>
+                            <input type="file" name="files" id="fileInput" accept="image/jpeg,image/png,image/jpg" class="hidden" multiple required>
+                        </div>
+                        <div id="batchInfo" class="text-sm text-gray-500 mt-2 hidden">
+                            <p>Total files: <span id="totalFiles">0</span></p>
+                            <p>Total size: <span id="totalSize">0 MB</span></p>
+                            <p id="compressionInfo"></p>
+                        </div>
+                        
+                        <!-- Hidden inputs will be added here dynamically for compressed files -->
+                        <div id="compressedDataContainer"></div>
+                    </div>
+                    
+                    <div id="uploadButtonContainer" class="text-center hidden">
+                        <button type="submit" id="submitButton" class="mt-4 w-full inline-flex justify-center items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-fest-primary hover:bg-fest-secondary focus:outline-none transition duration-300" {% if not cloudinary_configured %}disabled{% endif %}>
+                            <span id="spinner" class="spinner hidden"></span>
+                            <span id="buttonText">Upload Photos</span>
+                        </button>
+                    </div>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<!-- Browser image compression library -->
+<script src="https://cdn.jsdelivr.net/npm/browser-image-compression@2.0.0/dist/browser-image-compression.min.js"></script>
+
+<script>
+    const dragArea = document.getElementById('dragArea');
+    const fileInput = document.getElementById('fileInput');
+    const previewGrid = document.getElementById('previewGrid');
+    const uploadPrompt = document.getElementById('uploadPrompt');
+    const batchInfo = document.getElementById('batchInfo');
+    const totalFilesEl = document.getElementById('totalFiles');
+    const totalSizeEl = document.getElementById('totalSize');
+    const compressionInfo = document.getElementById('compressionInfo');
+    const uploadButtonContainer = document.getElementById('uploadButtonContainer');
+    const submitButton = document.getElementById('submitButton');
+    const spinner = document.getElementById('spinner');
+    const buttonText = document.getElementById('buttonText');
+    const compressedDataContainer = document.getElementById('compressedDataContainer');
+    const uploadForm = document.getElementById('uploadForm');
+    
+    // Max file size for compression (2MB)
+    const MAX_SIZE_MB = 2;
+    const MAX_SIZE_BYTES = MAX_SIZE_MB * 1024 * 1024;
+    
+    // Array to store file information
+    let selectedFiles = [];
+    
+    // Drag and drop events
+    ['dragover', 'dragleave', 'drop'].forEach(eventName => {
+        dragArea.addEventListener(eventName, preventDefaults, false);
+    });
+    
+    function preventDefaults(e) {
+        e.preventDefault();
+        e.stopPropagation();
+    }
+    
+    dragArea.addEventListener('dragover', function() {
+        dragArea.classList.add('active');
+    });
+    
+    dragArea.addEventListener('dragleave', function() {
+        dragArea.classList.remove('active');
+    });
+    
+    dragArea.addEventListener('drop', function(e) {
+        dragArea.classList.remove('active');
+        const files = e.dataTransfer.files;
+        if (files.length) {
+            handleFiles(files);
+        }
+    });
+    
+    // Click to select file
+    dragArea.addEventListener('click', function() {
+        if (!dragArea.querySelector('.preview-grid') || dragArea.querySelector('.preview-grid').children.length === 0) {
+            fileInput.click();
+        }
+    });
+    
+    fileInput.addEventListener('change', function() {
+        if (this.files.length) {
+            handleFiles(this.files);
+        }
+    });
+    
+    // Process multiple files
+    async function handleFiles(files) {
+        // Filter valid files
+        const validFiles = Array.from(files).filter(file => {
+            if (!file.type.match('image.*')) {
+                return false;
+            }
+            if (file.size > 10 * 1024 * 1024) {
+                alert(`File "${file.name}" exceeds 10MB limit. It will be skipped.`);
+                return false;
+            }
+            return true;
+        });
+        
+        if (validFiles.length === 0) return;
+        
+        // Show the preview grid and hide upload prompt if this is the first batch
+        if (selectedFiles.length === 0) {
+            uploadPrompt.classList.add('hidden');
+            previewGrid.classList.remove('hidden');
+            batchInfo.classList.remove('hidden');
+            uploadButtonContainer.classList.remove('hidden');
+        }
+        
+        // Process each file
+        for (const file of validFiles) {
+            const fileId = `file-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`;
+            
+            // Create preview item
+            const previewItem = document.createElement('div');
+            previewItem.className = 'preview-item';
+            previewItem.dataset.fileId = fileId;
+            
+            // Create preview image
+            const img = document.createElement('img');
+            img.alt = 'Preview';
+            
+            // Create remove button
+            const removeBtn = document.createElement('div');
+            removeBtn.className = 'remove-btn';
+            removeBtn.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>';
+            removeBtn.addEventListener('click', function(e) {
+                e.stopPropagation(); // Prevent triggering dragArea click
+                const itemToRemove = this.parentElement;
+                const fileIdToRemove = itemToRemove.dataset.fileId;
+                
+                // Remove from selectedFiles array
+                selectedFiles = selectedFiles.filter(f => f.id !== fileIdToRemove);
+                
+                // Remove from preview grid
+                itemToRemove.remove();
+                
+                // Remove associated compressed data input
+                const dataInput = document.getElementById(`data-${fileIdToRemove}`);
+                if (dataInput) dataInput.remove();
+                
+                // Update batch info
+                updateBatchInfo();
+                
+                // Show upload prompt if no files left
+                if (selectedFiles.length === 0) {
+                    previewGrid.classList.add('hidden');
+                    uploadPrompt.classList.remove('hidden');
+                    batchInfo.classList.add('hidden');
+                    uploadButtonContainer.classList.add('hidden');
+                }
+            });
+            
+            // Create file info element
+            const fileInfo = document.createElement('div');
+            fileInfo.className = 'file-info';
+            
+            // Add elements to preview item
+            previewItem.appendChild(img);
+            previewItem.appendChild(removeBtn);
+            previewItem.appendChild(fileInfo);
+            
+            // Add to preview grid
+            previewGrid.appendChild(previewItem);
+            
+            // Show preview and process compression
+            try {
+                // Display preview
+                const reader = new FileReader();
+                reader.onload = function(e) {
+                    img.src = e.target.result;
+                };
+                reader.readAsDataURL(file);
+                
+                // Format file size
+                const originalSizeMB = (file.size / (1024 * 1024)).toFixed(2);
+                fileInfo.textContent = `${originalSizeMB} MB`;
+                
+                // Track file info
+                const fileData = {
+                    id: fileId,
+                    originalFile: file,
+                    originalSize: file.size,
+                    name: file.name,
+                    wasCompressed: false
+                };
+                
+                // Compress if needed
+                if (file.size > MAX_SIZE_BYTES) {
+                    fileInfo.textContent = 'Compressing...';
+                    
+                    const options = {
+                        maxSizeMB: MAX_SIZE_MB,
+                        maxWidthOrHeight: 1920,
+                        useWebWorker: true
+                    };
+                    
+                    const compressedFile = await imageCompression(file, options);
+                    const compressedSizeMB = (compressedFile.size / (1024 * 1024)).toFixed(2);
+                    
+                    fileInfo.textContent = `${originalSizeMB} → ${compressedSizeMB} MB`;
+                    
+                    // Update file info with compressed data
+                    fileData.compressedFile = compressedFile;
+                    fileData.compressedSize = compressedFile.size;
+                    fileData.wasCompressed = true;
+                    
+                    // Create a data URL for the compressed file
+                    const reader = new FileReader();
+                    reader.readAsDataURL(compressedFile);
+                    reader.onloadend = function() {
+                        // Create hidden input for the compressed data
+                        const dataInput = document.createElement('input');
+                        dataInput.type = 'hidden';
+                        dataInput.name = `compressed_data_${fileId}`;
+                        dataInput.id = `data-${fileId}`;
+                        dataInput.value = reader.result;
+                        compressedDataContainer.appendChild(dataInput);
+                        
+                        // Create hidden input for the filename
+                        const nameInput = document.createElement('input');
+                        nameInput.type = 'hidden';
+                        nameInput.name = `compressed_filename_${fileId}`;
+                        nameInput.value = file.name;
+                        compressedDataContainer.appendChild(nameInput);
+                        
+                        // Update file info
+                        fileData.dataUrl = reader.result;
+                    };
+                }
+                
+                // Add to selected files
+                selectedFiles.push(fileData);
+                
+                // Update batch info
+                updateBatchInfo();
+                
+            } catch (error) {
+                console.error(`Error processing file ${file.name}:`, error);
+                fileInfo.textContent = 'Error';
+            }
+        }
+    }
+    
+    // Update batch information
+    function updateBatchInfo() {
+        totalFilesEl.textContent = selectedFiles.length;
+        
+        const originalTotalSize = selectedFiles.reduce((total, file) => total + file.originalSize, 0);
+        const originalTotalSizeMB = (originalTotalSize / (1024 * 1024)).toFixed(2);
+        
+        let compressedTotalSize = 0;
+        let compressedCount = 0;
+        
+        selectedFiles.forEach(file => {
+            if (file.wasCompressed) {
+                compressedTotalSize += (file.compressedSize || file.originalSize);
+                compressedCount++;
+            } else {
+                compressedTotalSize += file.originalSize;
+            }
+        });
+        
+        const compressedTotalSizeMB = (compressedTotalSize / (1024 * 1024)).toFixed(2);
+        totalSizeEl.textContent = `${compressedTotalSizeMB} MB`;
+        
+        if (compressedCount > 0) {
+            const savedBytes = originalTotalSize - compressedTotalSize;
+            const savedPercentage = ((savedBytes / originalTotalSize) * 100).toFixed(1);
+            const savedMB = (savedBytes / (1024 * 1024)).toFixed(2);
+            compressionInfo.textContent = `Compression applied to ${compressedCount} files, saving ${savedPercentage}% (${savedMB} MB)`;
+        } else {
+            compressionInfo.textContent = 'All files are already optimized';
+        }
+    }
+    
+    // Handle form submission
+    uploadForm.addEventListener('submit', function(e) {
+        if (selectedFiles.length === 0) {
+            e.preventDefault();
+            alert('Please select at least one photo to upload');
+            return;
+        }
+        
+        // Make sure all uncompressed files are included
+        for (const fileInfo of selectedFiles) {
+            if (!fileInfo.wasCompressed) {
+                // If this wasn't compressed, we need to include the original file in the form data
+                // First check if we already have a form field for this file
+                if (!document.querySelector(`input[name="file_${fileInfo.id}"]`)) {
+                    // Create a hidden file input with the original file
+                    const originalFileItem = new DataTransfer();
+                    originalFileItem.items.add(fileInfo.originalFile);
+                    
+                    const tempFileInput = document.createElement('input');
+                    tempFileInput.type = 'file';
+                    tempFileInput.name = 'files';
+                    tempFileInput.style.display = 'none';
+                    tempFileInput.files = originalFileItem.files;
+                    
+                    uploadForm.appendChild(tempFileInput);
+                }
+            }
+        }
+        
+        // Show loading state
+        spinner.classList.remove('hidden');
+        buttonText.textContent = 'Uploading...';
+        submitButton.disabled = true;
+    });
+</script>
+{% endblock %} 
