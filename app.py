@@ -1,5 +1,5 @@
 import os
-from flask import Flask, render_template, request, redirect, url_for, flash, jsonify, send_file
+from flask import Flask, render_template, request, redirect, url_for, flash, jsonify, send_file, session
 import cloudinary
 import cloudinary.uploader
 import cloudinary.api
@@ -13,6 +13,7 @@ from datetime import datetime
 import zipfile
 import tempfile
 from PIL import Image, ImageDraw, ImageFont
+import functools
 
 # Load environment variables
 load_dotenv()
@@ -40,11 +41,30 @@ def allowed_file(filename):
 app = Flask(__name__)
 app.secret_key = 'nirman2k25_secure_key_for_sessions'
 
+# PIN protection middleware for upload page
+def upload_pin_required(func):
+    @functools.wraps(func)
+    def decorated_function(*args, **kwargs):
+        if request.method == 'GET' and not session.get('upload_authorized'):
+            return render_template('upload_pin.html')
+        return func(*args, **kwargs)
+    return decorated_function
+
 @app.route('/')
 def home():
     return render_template('home.html', cloudinary_configured=cloudinary_configured)
 
+@app.route('/verify_upload_pin', methods=['POST'])
+def verify_upload_pin():
+    pin = request.form.get('pin')
+    if pin == '2005':
+        session['upload_authorized'] = True
+        return redirect(url_for('upload'))
+    flash('Incorrect PIN. Please try again.', 'error')
+    return render_template('upload_pin.html')
+
 @app.route('/upload', methods=['GET', 'POST'])
+@upload_pin_required
 def upload():
     if request.method == 'POST':
         try:
